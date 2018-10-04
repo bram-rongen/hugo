@@ -125,7 +125,7 @@ func (v HugoVersion) NextPatchLevel(level int) HugoVersion {
 // CurrentHugoVersion represents the current build version.
 // This should be the only one.
 var CurrentHugoVersion = HugoVersion{
-	Number:     0.49,
+	Number:     0.50,
 	PatchLevel: 0,
 	Suffix:     "-DEV",
 }

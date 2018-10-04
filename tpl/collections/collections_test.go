@@ -256,6 +256,7 @@ func TestFirst(t *testing.T) {
 		{int64(2), []int{100, 200, 300}, []int{100, 200}},
 		{100, []int{100, 200}, []int{100, 200}},
 		{"1", []int{100, 200, 300}, []int{100}},
+		{0, []string{"h", "u", "g", "o"}, []string{}},
 		{int64(-1), []int{100, 200, 300}, false},
 		{"noint", []int{100, 200, 300}, false},
 		{1, nil, false},
@@ -437,22 +438,24 @@ func TestIsSet(t *testing.T) {
 		key    interface{}
 		expect bool
 		isErr  bool
-		errStr string
 	}{
-		{[]interface{}{1, 2, 3, 5}, 2, true, false, ""},
-		{[]interface{}{1, 2, 3, 5}, 22, false, false, ""},
+		{[]interface{}{1, 2, 3, 5}, 2, true, false},
+		{[]interface{}{1, 2, 3, 5}, "2", true, false},
+		{[]interface{}{1, 2, 3, 5}, 2.0, true, false},
 
-		{map[string]interface{}{"a": 1, "b": 2}, "b", true, false, ""},
-		{map[string]interface{}{"a": 1, "b": 2}, "bc", false, false, ""},
+		{[]interface{}{1, 2, 3, 5}, 22, false, false},
 
-		{time.Now(), "Day", false, false, ""},
-		{nil, "nil", false, false, ""},
+		{map[string]interface{}{"a": 1, "b": 2}, "b", true, false},
+		{map[string]interface{}{"a": 1, "b": 2}, "bc", false, false},
+
+		{time.Now(), "Day", false, false},
+		{nil, "nil", false, false},
+		{[]interface{}{1, 2, 3, 5}, TstX{}, false, true},
 	} {
 		errMsg := fmt.Sprintf("[%d] %v", i, test)
 
 		result, err := ns.IsSet(test.a, test.key)
 		if test.isErr {
-			assert.EqualError(t, err, test.errStr, errMsg)
 			continue
 		}
 
@@ -642,16 +645,76 @@ func TestShuffleRandomising(t *testing.T) {
 }
 
 var _ collections.Slicer = (*tstSlicer)(nil)
+var _ collections.Slicer = (*tstSlicerIn1)(nil)
+var _ collections.Slicer = (*tstSlicerIn2)(nil)
+var _ testSlicerInterface = (*tstSlicerIn1)(nil)
+var _ testSlicerInterface = (*tstSlicerIn1)(nil)
+
+type testSlicerInterface interface {
+	Name() string
+}
+
+type testSlicerInterfaces []testSlicerInterface
+
+type tstSlicerIn1 struct {
+	name string
+}
+
+type tstSlicerIn2 struct {
+	name string
+}
 
 type tstSlicer struct {
 	name string
+}
+
+func (p *tstSlicerIn1) Slice(in interface{}) (interface{}, error) {
+	items := in.([]interface{})
+	result := make(testSlicerInterfaces, len(items))
+	for i, v := range items {
+		switch vv := v.(type) {
+		case testSlicerInterface:
+			result[i] = vv
+		default:
+			return nil, errors.New("invalid type")
+		}
+
+	}
+	return result, nil
+}
+
+func (p *tstSlicerIn2) Slice(in interface{}) (interface{}, error) {
+	items := in.([]interface{})
+	result := make(testSlicerInterfaces, len(items))
+	for i, v := range items {
+		switch vv := v.(type) {
+		case testSlicerInterface:
+			result[i] = vv
+		default:
+			return nil, errors.New("invalid type")
+		}
+	}
+	return result, nil
+}
+
+func (p *tstSlicerIn1) Name() string {
+	return p.Name()
+}
+
+func (p *tstSlicerIn2) Name() string {
+	return p.Name()
 }
 
 func (p *tstSlicer) Slice(in interface{}) (interface{}, error) {
 	items := in.([]interface{})
 	result := make(tstSlicers, len(items))
 	for i, v := range items {
-		result[i] = v.(*tstSlicer)
+		switch vv := v.(type) {
+		case *tstSlicer:
+			result[i] = vv
+		default:
+			return nil, errors.New("invalid type")
+		}
 	}
 	return result, nil
 }
@@ -674,6 +737,8 @@ func TestSlice(t *testing.T) {
 		{[]interface{}{nil}, []interface{}{nil}},
 		{[]interface{}{5, "b"}, []interface{}{5, "b"}},
 		{[]interface{}{tstNoStringer{}}, []tstNoStringer{tstNoStringer{}}},
+		{[]interface{}{&tstSlicerIn1{"a"}, &tstSlicerIn2{"b"}}, testSlicerInterfaces{&tstSlicerIn1{"a"}, &tstSlicerIn2{"b"}}},
+		{[]interface{}{&tstSlicerIn1{"a"}, &tstSlicer{"b"}}, []interface{}{&tstSlicerIn1{"a"}, &tstSlicer{"b"}}},
 	} {
 		errMsg := fmt.Sprintf("[%d] %v", i, test.args)
 

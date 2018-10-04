@@ -14,6 +14,7 @@
 package hugolib
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
@@ -43,7 +44,6 @@ import (
 	"github.com/gohugoio/hugo/media"
 
 	"github.com/markbates/inflect"
-	"golang.org/x/net/context"
 
 	"github.com/fsnotify/fsnotify"
 	bp "github.com/gohugoio/hugo/bufferpool"
@@ -795,7 +795,7 @@ func (s *Site) processPartial(events []fsnotify.Event) (whatChanged, error) {
 				removed = true
 			}
 		}
-		if removed && isContentFile(ev.Name) {
+		if removed && IsContentFile(ev.Name) {
 			h.removePageByFilename(ev.Name)
 		}
 
@@ -990,12 +990,12 @@ func (s *Site) setupSitePages() {
 	var siteLastChange time.Time
 
 	for i, page := range s.RegularPages {
-		if i < len(s.RegularPages)-1 {
-			page.Next = s.RegularPages[i+1]
+		if i > 0 {
+			page.NextPage = s.RegularPages[i-1]
 		}
 
-		if i > 0 {
-			page.Prev = s.RegularPages[i-1]
+		if i < len(s.RegularPages)-1 {
+			page.PrevPage = s.RegularPages[i+1]
 		}
 
 		// Determine Site.Info.LastChange
@@ -1012,6 +1012,8 @@ func (s *Site) setupSitePages() {
 }
 
 func (s *Site) render(config *BuildCfg, outFormatIdx int) (err error) {
+	// Clear the global page cache.
+	spc.clear()
 
 	if outFormatIdx == 0 {
 		if err = s.preparePages(); err != nil {
@@ -1467,14 +1469,18 @@ func (s *Site) assembleTaxonomies() {
 
 		for _, p := range s.Pages {
 			vals := p.getParam(plural, !s.Info.preserveTaxonomyNames)
-			weight := p.getParamToLower(plural + "_weight")
-			if weight == nil {
-				weight = 0
+
+			w := p.getParamToLower(plural + "_weight")
+			weight, err := cast.ToIntE(w)
+			if err != nil {
+				s.Log.ERROR.Printf("Unable to convert taxonomy weight %#v to int for %s", w, p.Source.File.Path())
+				// weight will equal zero, so let the flow continue
 			}
+
 			if vals != nil {
 				if v, ok := vals.([]string); ok {
 					for _, idx := range v {
-						x := WeightedPage{weight.(int), p}
+						x := WeightedPage{weight, p}
 						s.Taxonomies[plural].add(s.getTaxonomyKey(idx), x)
 						if s.Info.preserveTaxonomyNames {
 							// Need to track the original
@@ -1482,7 +1488,7 @@ func (s *Site) assembleTaxonomies() {
 						}
 					}
 				} else if v, ok := vals.(string); ok {
-					x := WeightedPage{weight.(int), p}
+					x := WeightedPage{weight, p}
 					s.Taxonomies[plural].add(s.getTaxonomyKey(v), x)
 					if s.Info.preserveTaxonomyNames {
 						// Need to track the original
@@ -1513,8 +1519,6 @@ func (s *Site) resetBuildState() {
 	s.futureCount = 0
 
 	s.expiredCount = 0
-
-	spc = newPageCache()
 
 	for _, p := range s.rawAllPages {
 		p.subSections = Pages{}

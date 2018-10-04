@@ -14,13 +14,11 @@
 package hugolib
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"runtime"
 
-	// Use this until errgroup gets ported to context
-	// See https://github.com/golang/go/issues/19781
-	"golang.org/x/net/context"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -192,7 +190,7 @@ func (s *siteContentProcessor) process(ctx context.Context) error {
 		return err
 	}
 
-	s.site.rawAllPages.Sort()
+	s.site.rawAllPages.sort()
 
 	return nil
 
