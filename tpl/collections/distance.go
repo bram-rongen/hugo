@@ -15,9 +15,9 @@ package collections
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"strings"
-	"math"
 )
 
 // Where returns a filtered subset of a given data type.
@@ -40,18 +40,18 @@ func (ns *Namespace) DistanceSort(seq interface{}, fieldName interface{}, lat in
 	}
 
 	sortByField, ok := fieldName.(string)
-	if (!ok) {
-    return nil, errors.New("fieldName should be a string.")
+	if !ok {
+		return nil, errors.New("fieldName should be a string.")
 	}
 
 	centerLat, ok := lat.(float64)
-	if (!ok) {
-    return nil, errors.New("centerLat should be a float.")
+	if !ok {
+		return nil, errors.New("centerLat should be a float.")
 	}
 
 	centerLon, ok := lon.(float64)
-	if (!ok) {
-    return nil, errors.New("centerLon should be a float.")
+	if !ok {
+		return nil, errors.New("centerLon should be a float.")
 	}
 
 	// Create a list of pairs that will be used to do the sort
@@ -77,6 +77,22 @@ func (ns *Namespace) DistanceSort(seq interface{}, fieldName interface{}, lat in
 			location = v.Interface().(map[string]interface{})
 			p.Pairs[i].Key = reflect.ValueOf(Distance(centerLat, centerLon, location["lat"].(float64), location["lon"].(float64)))
 		}
+	case reflect.Map:
+		keys := seqv.MapKeys()
+		for i := 0; i < seqv.Len(); i++ {
+			p.Pairs[i].Value = seqv.MapIndex(keys[i])
+			v := p.Pairs[i].Value
+			var err error
+			for _, elemName := range path {
+				v, err = evaluateSubElem(v, elemName)
+				if err != nil {
+					return nil, err
+				}
+			}
+			var location map[string]interface{}
+			location = v.Interface().(map[string]interface{})
+			p.Pairs[i].Key = reflect.ValueOf(Distance(centerLat, centerLon, location["lat"].(float64), location["lon"].(float64)))
+		}
 	}
 
 	return p.sort(), nil
@@ -98,7 +114,7 @@ func hsin(theta float64) float64 {
 // http://en.wikipedia.org/wiki/Haversine_formula
 func Distance(lat1, lon1, lat2, lon2 float64) float64 {
 	// convert to radians
-  // must cast radius as float to multiply later
+	// must cast radius as float to multiply later
 	var la1, lo1, la2, lo2, r float64
 	la1 = lat1 * math.Pi / 180
 	lo1 = lon1 * math.Pi / 180
